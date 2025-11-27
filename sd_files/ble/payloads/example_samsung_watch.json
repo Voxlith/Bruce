@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "name": "Galaxy Watch",
+  "type": "advertisement",
+  "address": "11:22:33:44:55:66",
+  "rssi": -50,
+  "adv_data": {
+    "flags": "0x06",
+    "complete_name": "Galaxy Watch4",
+    "tx_power": 0,
+    "manufacturer_data": {
+      "company_id": "0x0075",
+      "data": "01000200010100FF00004301"
+    },
+    "service_uuids": []
+  },
+  "raw_adv_data": "020106FF0F00FF7500010002000101FF00004301"
+}

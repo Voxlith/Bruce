@@ -1,0 +1,18 @@
+{
+  "version": "1.0",
+  "name": "AirPods Pro",
+  "type": "advertisement",
+  "address": "AA:BB:CC:DD:EE:FF",
+  "rssi": -45,
+  "adv_data": {
+    "flags": "0x06",
+    "complete_name": "AirPods Pro",
+    "tx_power": -10,
+    "manufacturer_data": {
+      "company_id": "0x004C",
+      "data": "071907200075AA3001000045121212000000000000000000000000000000"
+    },
+    "service_uuids": []
+  },
+  "raw_adv_data": "0201061AFF4C00071907200075AA3001000045121212000000000000000000000000000000"
+}
