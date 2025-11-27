@@ -4,6 +4,7 @@
 #include "modules/NRF24/nrf_common.h"
 #include "modules/NRF24/nrf_jammer.h"
 #include "modules/NRF24/nrf_spectrum.h"
+#include "modules/NRF24/bad_nrf.h"
 
 void NRF24Menu::optionsMenu() {
     options.clear();
@@ -22,6 +23,8 @@ void NRF24Menu::optionsMenu() {
 
     options.push_back({"CH Jammer", nrf_channel_jammer});
     options.push_back({"CH hopper", nrf_channel_hopper});
+    
+    options.push_back({"BAD NRF", badnrf_menu});
 
 #if defined(ARDUINO_M5STICK_C_PLUS) || defined(ARDUINO_M5STICK_C_PLUS2)
     options.push_back({"Config pins", [=]() { configMenu(); }});
