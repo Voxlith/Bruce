@@ -7,7 +7,24 @@
 #include "modules/ble/ble_spam.h"
 #include "modules/ble/ble_scanner.h"
 #include "modules/ble/ble_custom_spam.h"
+#include "modules/ble/ble_spam_xiaomi.h"
 #include <globals.h>
+
+// Submenu for BLE Spams
+void spamsMenu() {
+    std::vector<Option> spamOptions;
+    
+    spamOptions.push_back({"Applejuice", lambdaHelper(aj_adv, 0)});
+    spamOptions.push_back({"SourApple", lambdaHelper(aj_adv, 1)});
+    spamOptions.push_back({"Windows Spam", lambdaHelper(aj_adv, 2)});
+    spamOptions.push_back({"Samsung Spam", lambdaHelper(aj_adv, 3)});
+    spamOptions.push_back({"Android Spam", lambdaHelper(aj_adv, 4)});
+    spamOptions.push_back({"Xiaomi Spam", [=]() { xiaomi_spam(); }});
+    spamOptions.push_back({"Spam All", lambdaHelper(aj_adv, 5)});
+    spamOptions.push_back({"Spam Custom", lambdaHelper(aj_adv, 6)});
+    
+    loopOptions(spamOptions, MENU_TYPE_SUBMENU, "BLE Spams");
+}
 
 void BleMenu::optionsMenu() {
     options.clear();
@@ -31,13 +48,7 @@ void BleMenu::optionsMenu() {
     options.push_back({"Bad BLE", [=]() { ducky_setup(hid_ble, true); }});
 #endif
     options.push_back({"BLE Keyboard", [=]() { ducky_keyboard(hid_ble, true); }});
-    options.push_back({"Applejuice", lambdaHelper(aj_adv, 0)});
-    options.push_back({"SourApple", lambdaHelper(aj_adv, 1)});
-    options.push_back({"Windows Spam", lambdaHelper(aj_adv, 2)});
-    options.push_back({"Samsung Spam", lambdaHelper(aj_adv, 3)});
-    options.push_back({"Android Spam", lambdaHelper(aj_adv, 4)});
-    options.push_back({"Spam All", lambdaHelper(aj_adv, 5)});
-    options.push_back({"Spam Custom", lambdaHelper(aj_adv, 6)});
+    options.push_back({"Spams", [=]() { spamsMenu(); }});
     options.push_back({"Ninebot", [=]() { BLENinebot(); }});
     addOptionToMainMenu();
 

@@ -65,7 +65,31 @@ void BLEScanner::AdvertisedDeviceCallbacks::onResult(NimBLEAdvertisedDevice* adv
         device.rawAdvData.push_back(payload[i]);
     }
     
+    // Try to get Scan Response data (if Active Scan is enabled)
+    // NimBLE separates advertisement and scan response data
+    // The scan response is usually captured when we request the name or other data
     device.hasScanResponse = false;
+    
+    // Check if we have scan response by looking for additional data
+    // In NimBLE, haveName() returning true often means we got a scan response
+    if (advertisedDevice->haveName()) {
+        device.hasScanResponse = true;
+        // Unfortunately, NimBLE doesn't directly expose raw scan response data
+        // We need to manually build it from the available fields
+        
+        // Try to extract scan response data from the payload
+        // The scan response typically contains the complete name
+        String completeName = String(advertisedDevice->getName().c_str());
+        if (!completeName.isEmpty() && completeName != "Unknown") {
+            // Build scan response manually with Complete Local Name
+            uint8_t nameLen = completeName.length();
+            device.rawScanRsp.push_back(nameLen + 1);  // Length
+            device.rawScanRsp.push_back(0x09);         // Type: Complete Local Name
+            for (int i = 0; i < nameLen; i++) {
+                device.rawScanRsp.push_back((uint8_t)completeName[i]);
+            }
+        }
+    }
     
     // Check if device already exists (by address)
     bool found = false;
@@ -87,7 +111,7 @@ bool BLEScanner::startScan(uint32_t duration) {
     // Initialize BLE if not already done
     if (!NimBLEDevice::getInitialized()) {
         NimBLEDevice::init("");
-        vTaskDelay(10 / portTICK_PERIOD_MS);
+        vTaskDelay(100 / portTICK_PERIOD_MS); // Increased for proper init
     }
     
     // Create scan object
@@ -97,14 +121,14 @@ bool BLEScanner::startScan(uint32_t duration) {
     callbacks = new AdvertisedDeviceCallbacks(&scannedDevices);
     pBLEScan->setAdvertisedDeviceCallbacks(callbacks, false);
     
-    // Configure scan
+    // Configure scan with optimized parameters
     pBLEScan->setActiveScan(true);
-    pBLEScan->setInterval(100);
-    pBLEScan->setWindow(99);
+    pBLEScan->setInterval(50);  // Reduced for faster scanning
+    pBLEScan->setWindow(49);    // Window slightly less than interval
     pBLEScan->setMaxResults(0); // No limit
     
-    // Start scan
-    pBLEScan->start(duration, false);
+    // Start scan non-blocking for better responsiveness
+    pBLEScan->start(duration, nullptr, false);
     
     return true;
 }
@@ -218,6 +242,11 @@ bool BLEScanner::saveDevicePayload(const ScannedDevice& device, String filename)
     // Raw data
     doc["raw_adv_data"] = bytesToHex(device.rawAdvData.data(), device.rawAdvData.size());
     
+    // Raw Scan Response data (if available)
+    if (device.hasScanResponse && !device.rawScanRsp.empty()) {
+        doc["raw_scan_rsp"] = bytesToHex(device.rawScanRsp.data(), device.rawScanRsp.size());
+    }
+    
     // Write to file
     File file = fs->open(filepath, FILE_WRITE);
     if (!file) {
@@ -264,8 +293,13 @@ void ble_scan_advertiser() {
     BLEScanner scanner;
     bool scanning = false;
     int selectedIndex = 0;
+    int lastSelectedIndex = -1;  // Track last drawn selection
     unsigned long scanStartTime = 0;
+    unsigned long lastScreenUpdate = 0;
+    int lastSecondsRemaining = -1;
+    int lastDeviceCount = -1;
     const uint32_t SCAN_DURATION = 10; // seconds
+    const uint32_t SCREEN_UPDATE_INTERVAL = 1000; // Update screen every 1 second during scan
     
     drawMainBorderWithTitle("BLE Scan Advertiser");
     padprintln("");
@@ -276,13 +310,25 @@ void ble_scan_advertiser() {
         // Handle scanning state
         if (scanning) {
             if (millis() - scanStartTime < SCAN_DURATION * 1000) {
-                // Still scanning
-                drawMainBorderWithTitle("Scanning... " + String((SCAN_DURATION * 1000 - (millis() - scanStartTime)) / 1000) + "s");
-                padprintln("");
-                padprintln("Devices found: " + String(scanner.getDevices().size()));
-                padprintln("");
-                padprintln("Press ESC to stop");
-                delay(500);
+                // Still scanning - only update screen if values changed or interval elapsed
+                int secondsRemaining = (SCAN_DURATION * 1000 - (millis() - scanStartTime)) / 1000;
+                int deviceCount = scanner.getDevices().size();
+                
+                if (millis() - lastScreenUpdate >= SCREEN_UPDATE_INTERVAL || 
+                    secondsRemaining != lastSecondsRemaining || 
+                    deviceCount != lastDeviceCount) {
+                    
+                    drawMainBorderWithTitle("Scanning... " + String(secondsRemaining) + "s");
+                    padprintln("");
+                    padprintln("Devices found: " + String(deviceCount));
+                    padprintln("");
+                    padprintln("Press ESC to stop");
+                    
+                    lastSecondsRemaining = secondsRemaining;
+                    lastDeviceCount = deviceCount;
+                    lastScreenUpdate = millis();
+                }
+                delay(100);  // Reduced delay for more responsive input
             } else {
                 // Scan complete
                 scanner.stopScan();
@@ -295,30 +341,35 @@ void ble_scan_advertiser() {
                     padprintln("Press ESC to exit");
                 } else {
                     selectedIndex = 0;
+                    lastSelectedIndex = -1;  // Force redraw
                 }
             }
         } else if (!scanner.getDevices().empty()) {
-            // Display device list
-            auto& devices = scanner.getDevices();
-            drawMainBorderWithTitle("Found " + String(devices.size()) + " devices");
-            
-            // Display devices with selection
-            int startIdx = max(0, selectedIndex - 3);
-            int endIdx = min((int)devices.size(), startIdx + 5);
-            
-            for (int i = startIdx; i < endIdx; i++) {
-                String line = (i == selectedIndex) ? "> " : "  ";
-                line += devices[i].name;
-                if (devices[i].name.isEmpty() || devices[i].name == "Unknown") {
-                    line = (i == selectedIndex) ? "> " : "  ";
-                    line += devices[i].address.substring(0, 12);
+            // Display device list - only redraw if selection changed
+            if (lastSelectedIndex != selectedIndex) {
+                auto& devices = scanner.getDevices();
+                drawMainBorderWithTitle("Found " + String(devices.size()) + " devices");
+                
+                // Display devices with selection
+                int startIdx = max(0, selectedIndex - 3);
+                int endIdx = min((int)devices.size(), startIdx + 5);
+                
+                for (int i = startIdx; i < endIdx; i++) {
+                    String line = (i == selectedIndex) ? "> " : "  ";
+                    line += devices[i].name;
+                    if (devices[i].name.isEmpty() || devices[i].name == "Unknown") {
+                        line = (i == selectedIndex) ? "> " : "  ";
+                        line += devices[i].address.substring(0, 12);
+                    }
+                    line += " (" + String(devices[i].rssi) + ")";
+                    padprintln(line);
                 }
-                line += " (" + String(devices[i].rssi) + ")";
-                padprintln(line);
+                
+                padprintln("");
+                padprintln("OK:View ESC:Back");
+                
+                lastSelectedIndex = selectedIndex;  // Mark as drawn
             }
-            
-            padprintln("");
-            padprintln("OK:View ESC:Back");
         }
         
         // Handle input
@@ -340,6 +391,9 @@ void ble_scan_advertiser() {
                 scanner.startScan(SCAN_DURATION);
                 scanning = true;
                 scanStartTime = millis();
+                lastScreenUpdate = 0;  // Force immediate screen update
+                lastSecondsRemaining = -1;
+                lastDeviceCount = -1;
             } else {
                 // View selected device details
                 auto& device = scanner.getDevices()[selectedIndex];
@@ -371,17 +425,18 @@ void ble_scan_advertiser() {
         }
         
         if (!scanning && !scanner.getDevices().empty()) {
-            if (check(UpPress)) {
+            // Support both encoder (PrevPress/NextPress) and button navigation
+            if (check(UpPress) || check(PrevPress)) {
                 selectedIndex = max(0, selectedIndex - 1);
-                delay(200);
+                delay(50);
             }
-            if (check(DownPress)) {
+            if (check(DownPress) || check(NextPress)) {
                 selectedIndex = min((int)scanner.getDevices().size() - 1, selectedIndex + 1);
-                delay(200);
+                delay(50);
             }
         }
         
-        delay(100);
+        delay(50);
     }
     
     scanner.stopScan();

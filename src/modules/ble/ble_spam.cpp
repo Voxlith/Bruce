@@ -471,12 +471,21 @@ BLEAdvertisementData GetUniversalAdvertisementData(EBLEPayloadType Type) {
 }
 //// https://github.com/Spooks4576
 void executeSpam(EBLEPayloadType type) {
+    // Generate random MAC address for this spam cycle
     uint8_t macAddr[6];
     generateRandomMac(macAddr);
     esp_base_mac_addr_set(macAddr);
+
+    // Reinit to apply new MAC - but keep it quick
+    if (NimBLEDevice::getInitialized()) {
+        BLEDevice::deinit();
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+
     BLEDevice::init("");
     vTaskDelay(10 / portTICK_PERIOD_MS);
     esp_ble_tx_power_set(ESP_BLE_PWR_TYPE_ADV, MAX_TX_POWER);
+
     pAdvertising = BLEDevice::getAdvertising();
     BLEAdvertisementData advertisementData = GetUniversalAdvertisementData(type);
     BLEAdvertisementData oScanResponseData = BLEAdvertisementData();
@@ -485,11 +494,13 @@ void executeSpam(EBLEPayloadType type) {
     pAdvertising->setAdvertisementData(advertisementData);
     pAdvertising->setScanResponseData(oScanResponseData);
     pAdvertising->start();
-    vTaskDelay(50 / portTICK_PERIOD_MS);
+
+    // Increased time for better detection - phones need time to scan
+    vTaskDelay(150 / portTICK_PERIOD_MS);
 
     pAdvertising->stop();
     vTaskDelay(10 / portTICK_PERIOD_MS);
-    BLEDevice::deinit();
+    // Don't deinit here - keep BLE stack alive for faster next spam
 }
 
 void executeCustomSpam(String spamName) {
@@ -499,7 +510,13 @@ void executeCustomSpam(String spamName) {
     // Set the MAC address
     esp_base_mac_addr_set(macAddr);
 
-    // Initialize first time (helps clear the any previus spam)
+    // Reinit to apply new MAC
+    if (NimBLEDevice::getInitialized()) {
+        BLEDevice::deinit();
+        vTaskDelay(10 / portTICK_PERIOD_MS);
+    }
+
+    // Initialize with custom name
     BLEDevice::init("sh4rk");
 
     vTaskDelay(5 / portTICK_PERIOD_MS);
@@ -527,14 +544,13 @@ void executeCustomSpam(String spamName) {
     // Start advertising
     pAdvertising->start();
 
-    // Advertise for 20ms
-    // TODO (implement a way to change)
-    vTaskDelay(20 / portTICK_PERIOD_MS);
+    // Increased time for better detection
+    vTaskDelay(150 / portTICK_PERIOD_MS);
 
-    // Stop and clean up
+    // Stop - but don't deinit to keep BLE stack alive
     pAdvertising->stop();
     vTaskDelay(10 / portTICK_PERIOD_MS);
-    BLEDevice::deinit();
+    // Don't deinit here - keep BLE stack alive for faster next spam
 }
 
 void ibeacon(char *DeviceName, char *BEACON_UUID, int ManufacturerId) {
@@ -623,8 +639,9 @@ void aj_adv(int ble_choice) { // customSet defaults to false
     String spamName = "";
     if (ble_choice == 6) { spamName = keyboard("", 10, "Name to spam"); }
     timer = millis();
+
     while (1) {
-        if (millis() - timer > 100) {
+        if (millis() - timer > 200) { // Reduced from 100ms to 200ms for better phone detection
 
             switch (ble_choice) {
                 case 0: // Applejuice
@@ -657,6 +674,7 @@ void aj_adv(int ble_choice) { // customSet defaults to false
                         executeSpam(AppleJuice);
                         mael = 0;
                     }
+                    mael++; // Increment to cycle through types
                     break;
                 case 6: // custom
                     displayTextLine("Spamming " + spamName + "(" + String(count) + ")");
@@ -670,11 +688,18 @@ void aj_adv(int ble_choice) { // customSet defaults to false
             returnToMenu = true;
             break;
         }
+
+        vTaskDelay(10 / portTICK_PERIOD_MS); // Small delay to prevent tight loop
     }
 
-    BLEDevice::init("");
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-    pAdvertising = nullptr;
-    vTaskDelay(100 / portTICK_PERIOD_MS);
-    BLEDevice::deinit();
+    // Proper cleanup - deinit BLE stack at the end
+    if (NimBLEDevice::getInitialized()) {
+        if (pAdvertising) {
+            pAdvertising->stop();
+            pAdvertising = nullptr;
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+        BLEDevice::deinit();
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+    }
 }
