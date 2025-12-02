@@ -122,6 +122,9 @@ public:
     bool sendKeyRelease();
     bool sendString(const String &text);
     
+    // DuckyScript execution (Phase 6.3)
+    bool executeDuckyScript(FS &fs, const String &filepath);
+    
     // Battery service (Phase 4)
     bool setBatteryLevel(uint8_t level);
     uint8_t getBatteryLevel() const { return batteryLevel; }
@@ -163,6 +166,7 @@ void ble_spoof_scan_and_capture();
 void ble_spoof_load_profile();
 void ble_spoof_start_spoofing();
 void ble_spoof_stop_spoofing();
+void ble_spoof_execute_payload();  // Phase 6.3: Execute DuckyScript payload
 void ble_spoof_main_menu();
 
 #endif // __BLE_SPOOF_H__

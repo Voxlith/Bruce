@@ -788,6 +788,338 @@ bool BleSpoofModule::setBatteryLevel(uint8_t level) {
 }
 
 // ============================================================================
+// DuckyScript Execution (Phase 6.3)
+// ============================================================================
+
+// DuckyScript command parsing structures (from ducky_typer.cpp)
+enum DuckyCommandType {
+    DuckyCommandType_Unknown,
+    DuckyCommandType_Cmd,
+    DuckyCommandType_Print,
+    DuckyCommandType_Delay,
+    DuckyCommandType_Comment,
+    DuckyCommandType_Loop,
+    DuckyCommandType_Combination
+};
+
+struct DuckyCommand {
+    const char *command;
+    char key;
+    DuckyCommandType type;
+};
+
+struct DuckyCombination {
+    const char *command;
+    char key1;
+    char key2;
+    char key3;
+};
+
+// DuckyScript command tables (from ducky_typer.cpp)
+const DuckyCombination duckyComb[]{
+    {"CTRL-ALT",       KEY_LEFT_CTRL, KEY_LEFT_ALT,   0             },
+    {"CTRL-SHIFT",     KEY_LEFT_CTRL, KEY_LEFT_SHIFT, 0             },
+    {"CTRL-GUI",       KEY_LEFT_CTRL, KEY_LEFT_GUI,   0             },
+    {"CTRL-ESCAPE",    KEY_LEFT_CTRL, KEY_ESC,        0             },
+    {"ALT-SHIFT",      KEY_LEFT_ALT,  KEY_LEFT_SHIFT, 0             },
+    {"ALT-GUI",        KEY_LEFT_ALT,  KEY_LEFT_GUI,   0             },
+    {"GUI-SHIFT",      KEY_LEFT_GUI,  KEY_LEFT_SHIFT, 0             },
+    {"GUI-SPACE",      KEY_LEFT_GUI,  KEY_SPACE,      0             },
+    {"CTRL-ALT-SHIFT", KEY_LEFT_CTRL, KEY_LEFT_ALT,   KEY_LEFT_SHIFT},
+    {"CTRL-ALT-GUI",   KEY_LEFT_CTRL, KEY_LEFT_ALT,   KEY_LEFT_GUI  },
+    {"ALT-SHIFT-GUI",  KEY_LEFT_ALT,  KEY_LEFT_SHIFT, KEY_LEFT_GUI  },
+    {"CTRL-SHIFT-GUI", KEY_LEFT_CTRL, KEY_LEFT_SHIFT, KEY_LEFT_GUI  }
+};
+
+#define DEF_DELAY 100
+
+const DuckyCommand duckyCmds[]{
+    {"STRING",         0,                DuckyCommandType_Print      },
+    {"STRINGLN",       0,                DuckyCommandType_Print      },
+    {"REM",            0,                DuckyCommandType_Comment    },
+    {"DELAY",          0,                DuckyCommandType_Delay      },
+    {"DEFAULTDELAY",   DEF_DELAY,        DuckyCommandType_Delay      },
+    {"REPEAT",         0,                DuckyCommandType_Loop       },
+    {"CTRL-ALT",       0,                DuckyCommandType_Combination},
+    {"CTRL-SHIFT",     0,                DuckyCommandType_Combination},
+    {"CTRL-GUI",       0,                DuckyCommandType_Combination},
+    {"CTRL-ESCAPE",    0,                DuckyCommandType_Combination},
+    {"ALT-SHIFT",      0,                DuckyCommandType_Combination},
+    {"ALT-GUI",        0,                DuckyCommandType_Combination},
+    {"GUI-SHIFT",      0,                DuckyCommandType_Combination},
+    {"GUI-SPACE",      0,                DuckyCommandType_Combination},
+    {"CTRL-ALT-SHIFT", 0,                DuckyCommandType_Combination},
+    {"CTRL-ALT-GUI",   0,                DuckyCommandType_Combination},
+    {"ALT-SHIFT-GUI",  0,                DuckyCommandType_Combination},
+    {"CTRL-SHIFT-GUI", 0,                DuckyCommandType_Combination},
+    {"BACKSPACE",      KEYBACKSPACE,     DuckyCommandType_Cmd        },
+    {"DELETE",         KEY_DELETE,       DuckyCommandType_Cmd        },
+    {"ALT",            KEY_LEFT_ALT,     DuckyCommandType_Cmd        },
+    {"CTRL",           KEY_LEFT_CTRL,    DuckyCommandType_Cmd        },
+    {"GUI",            KEY_LEFT_GUI,     DuckyCommandType_Cmd        },
+    {"SHIFT",          KEY_LEFT_SHIFT,   DuckyCommandType_Cmd        },
+    {"ESCAPE",         KEY_ESC,          DuckyCommandType_Cmd        },
+    {"TAB",            KEYTAB,           DuckyCommandType_Cmd        },
+    {"ENTER",          KEY_RETURN,       DuckyCommandType_Cmd        },
+    {"DOWNARROW",      KEY_DOWN_ARROW,   DuckyCommandType_Cmd        },
+    {"DOWN",           KEY_DOWN_ARROW,   DuckyCommandType_Cmd        },
+    {"LEFTARROW",      KEY_LEFT_ARROW,   DuckyCommandType_Cmd        },
+    {"LEFT",           KEY_LEFT_ARROW,   DuckyCommandType_Cmd        },
+    {"RIGHTARROW",     KEY_RIGHT_ARROW,  DuckyCommandType_Cmd        },
+    {"RIGHT",          KEY_RIGHT_ARROW,  DuckyCommandType_Cmd        },
+    {"UPARROW",        KEY_UP_ARROW,     DuckyCommandType_Cmd        },
+    {"UP",             KEY_UP_ARROW,     DuckyCommandType_Cmd        },
+    {"BREAK",          KEY_PAUSE,        DuckyCommandType_Cmd        },
+    {"CAPSLOCK",       KEY_CAPS_LOCK,    DuckyCommandType_Cmd        },
+    {"PAUSE",          KEY_PAUSE,        DuckyCommandType_Cmd        },
+    {"END",            KEY_END,          DuckyCommandType_Cmd        },
+    {"HOME",           KEY_HOME,         DuckyCommandType_Cmd        },
+    {"INSERT",         KEY_INSERT,       DuckyCommandType_Cmd        },
+    {"NUMLOCK",        LED_NUMLOCK,      DuckyCommandType_Cmd        },
+    {"PAGEUP",         KEY_PAGE_UP,      DuckyCommandType_Cmd        },
+    {"PAGEDOWN",       KEY_PAGE_DOWN,    DuckyCommandType_Cmd        },
+    {"PRINTSCREEN",    KEY_PRINT_SCREEN, DuckyCommandType_Cmd        },
+    {"SCROLLOCK",      KEY_SCROLL_LOCK,  DuckyCommandType_Cmd        },
+    {"MENU",           KEY_MENU,         DuckyCommandType_Cmd        },
+    {"F1",             KEY_F1,           DuckyCommandType_Cmd        },
+    {"F2",             KEY_F2,           DuckyCommandType_Cmd        },
+    {"F3",             KEY_F3,           DuckyCommandType_Cmd        },
+    {"F4",             KEY_F4,           DuckyCommandType_Cmd        },
+    {"F5",             KEY_F5,           DuckyCommandType_Cmd        },
+    {"F6",             KEY_F6,           DuckyCommandType_Cmd        },
+    {"F7",             KEY_F7,           DuckyCommandType_Cmd        },
+    {"F8",             KEY_F8,           DuckyCommandType_Cmd        },
+    {"F9",             KEY_F9,           DuckyCommandType_Cmd        },
+    {"F10",            KEY_F10,          DuckyCommandType_Cmd        },
+    {"F11",            KEY_F11,          DuckyCommandType_Cmd        },
+    {"F12",            KEY_F12,          DuckyCommandType_Cmd        },
+    {"SPACE",          KEY_SPACE,        DuckyCommandType_Cmd        }
+};
+
+// Helper function to send a key press via our HID module
+void sendKey(uint8_t key) {
+    if (key == 0) return;
+    bleSpoofModule.sendKeyPress(key, 0);
+    delay(20);
+    bleSpoofModule.sendKeyRelease();
+    delay(20);
+}
+
+// Helper function to send a string via our HID module
+void sendDuckyString(const String &str) {
+    bleSpoofModule.sendString(str);
+}
+
+// Helper function to send a string with newline
+void sendDuckyStringLn(const String &str) {
+    bleSpoofModule.sendString(str);
+    sendKey(KEY_RETURN);
+}
+
+bool BleSpoofModule::executeDuckyScript(FS &fs, const String &filepath) {
+    if (!hidEnabled) {
+        Serial.println("[BLE Spoof] HID not enabled");
+        return false;
+    }
+    
+    if (!fs.exists(filepath) || filepath == "") {
+        Serial.println("[BLE Spoof] DuckyScript file not found");
+        return false;
+    }
+    
+    File payloadFile = fs.open(filepath, "r");
+    if (!payloadFile) {
+        Serial.println("[BLE Spoof] Failed to open DuckyScript file");
+        return false;
+    }
+    
+    tft.fillScreen(bruceConfig.bgColor);
+    drawMainBorder();
+    tft.setCursor(10, 30);
+    tft.setTextSize(1);
+    tft.setTextColor(bruceConfig.priColor);
+    tft.println("Executing DuckyScript...");
+    tft.println();
+    
+    String lineContent = "";
+    String Command = "";
+    char Cmd[15];
+    String Argument = "";
+    String RepeatTmp = "";
+    char ArgChar = '\0';
+    bool ArgIsCmd;
+    
+    // Release all keys at start
+    sendKeyRelease();
+    
+    while (payloadFile.available()) {
+        previousMillis = millis(); // resets DimScreen
+        
+        // Allow pausing/canceling
+        if (check(EscPress)) {
+            tft.setTextColor(TFT_RED);
+            tft.println("\nScript canceled!");
+            break;
+        }
+        
+        // Read line (handle CRLF)
+        lineContent = payloadFile.readStringUntil('\n');
+        if (lineContent.endsWith("\r")) lineContent.remove(lineContent.length() - 1);
+        
+        RepeatTmp = lineContent.substring(0, lineContent.indexOf(' '));
+        RepeatTmp = RepeatTmp.c_str();
+        
+        if (RepeatTmp == "REPEAT") {
+            if (lineContent.indexOf(' ') > 0) {
+                RepeatTmp = lineContent.substring(lineContent.indexOf(' ') + 1);
+                if (RepeatTmp.toInt() == 0) {
+                    RepeatTmp = "1";
+                    tft.setTextColor(ALCOLOR);
+                    tft.println("REPEAT argument NaN, repeating once");
+                }
+            } else {
+                RepeatTmp = "1";
+                tft.setTextColor(ALCOLOR);
+                tft.println("REPEAT without argument, repeating once");
+            }
+        } else {
+            Command = lineContent.substring(0, lineContent.indexOf(' '));
+            strcpy(Cmd, Command.c_str());
+            if (lineContent.indexOf(' ') > 0)
+                Argument = lineContent.substring(lineContent.indexOf(' ') + 1);
+            else Argument = "";
+            RepeatTmp = "1";
+        }
+        
+        uint16_t i;
+        ArgIsCmd = false;
+        Argument = Argument.c_str();
+        ArgChar = Argument.charAt(0);
+        
+        for (i = 0; i < RepeatTmp.toInt(); i++) {
+            DuckyCommand *ArgCmd = nullptr;
+            DuckyCommand *PriCmd = nullptr;
+            ArgIsCmd = false;
+            
+            for (auto cmds : duckyCmds) {
+                if (strcmp(Cmd, cmds.command) == 0) {
+                    PriCmd = &cmds;
+                    
+                    // STRING and STRINGLN
+                    if (cmds.type == DuckyCommandType_Print) {
+                        if (strcmp(cmds.command, "STRINGLN") == 0) {
+                            sendDuckyStringLn(Argument);
+                        } else {
+                            sendDuckyString(Argument);
+                        }
+                        break;
+                    }
+                    // DELAY and DEFAULTDELAY
+                    else if (cmds.type == DuckyCommandType_Delay) {
+                        if ((int)cmds.key > 0) delay(DEF_DELAY);
+                        else if (Argument.toInt() > 0) delay(Argument.toInt());
+                        else delay(DEF_DELAY);
+                        break;
+                    }
+                    // Comment
+                    else if (cmds.type == DuckyCommandType_Comment) {
+                        yield();
+                        break;
+                    }
+                    // Normal commands
+                    else if (cmds.type == DuckyCommandType_Cmd) {
+                        sendKeyPress(cmds.key, 0);
+                        ArgIsCmd = true;
+                    }
+                    // Combinations
+                    else if (cmds.type == DuckyCommandType_Combination) {
+                        for (auto comb : duckyComb) {
+                            if (strcmp(Cmd, comb.command) == 0) {
+                                uint8_t modifiers = 0;
+                                
+                                // Build modifiers byte
+                                if (comb.key1 == KEY_LEFT_CTRL) modifiers |= 0x01;
+                                if (comb.key1 == KEY_LEFT_SHIFT) modifiers |= 0x02;
+                                if (comb.key1 == KEY_LEFT_ALT) modifiers |= 0x04;
+                                if (comb.key1 == KEY_LEFT_GUI) modifiers |= 0x08;
+                                
+                                if (comb.key2 == KEY_LEFT_CTRL) modifiers |= 0x01;
+                                if (comb.key2 == KEY_LEFT_SHIFT) modifiers |= 0x02;
+                                if (comb.key2 == KEY_LEFT_ALT) modifiers |= 0x04;
+                                if (comb.key2 == KEY_LEFT_GUI) modifiers |= 0x08;
+                                
+                                if (comb.key3 == KEY_LEFT_CTRL) modifiers |= 0x01;
+                                if (comb.key3 == KEY_LEFT_SHIFT) modifiers |= 0x02;
+                                if (comb.key3 == KEY_LEFT_ALT) modifiers |= 0x04;
+                                if (comb.key3 == KEY_LEFT_GUI) modifiers |= 0x08;
+                                
+                                // Find the non-modifier key
+                                uint8_t regularKey = 0;
+                                if (comb.key1 != KEY_LEFT_CTRL && comb.key1 != KEY_LEFT_SHIFT && 
+                                    comb.key1 != KEY_LEFT_ALT && comb.key1 != KEY_LEFT_GUI) {
+                                    regularKey = comb.key1;
+                                }
+                                if (comb.key2 != KEY_LEFT_CTRL && comb.key2 != KEY_LEFT_SHIFT && 
+                                    comb.key2 != KEY_LEFT_ALT && comb.key2 != KEY_LEFT_GUI) {
+                                    regularKey = comb.key2;
+                                }
+                                if (comb.key3 != 0 && comb.key3 != KEY_LEFT_CTRL && comb.key3 != KEY_LEFT_SHIFT && 
+                                    comb.key3 != KEY_LEFT_ALT && comb.key3 != KEY_LEFT_GUI) {
+                                    regularKey = comb.key3;
+                                }
+                                
+                                sendKeyPress(regularKey, modifiers);
+                                ArgIsCmd = true;
+                            }
+                        }
+                    }
+                }
+                
+                // Check if the Argument contains a command
+                if (strcmp(Argument.c_str(), cmds.command) == 0) {
+                    ArgCmd = &cmds;
+                }
+            }
+            
+            if (ArgCmd != nullptr && PriCmd != nullptr) {
+                if (ArgCmd->type == DuckyCommandType_Cmd) {
+                    sendKeyPress(ArgCmd->key, 0);
+                }
+            } else if (ArgIsCmd && PriCmd != nullptr) {
+                if (ArgChar != '\0') {
+                    sendKeyPress((uint8_t)ArgChar, 0);
+                }
+            }
+            
+            sendKeyRelease();
+            
+            if (PriCmd == nullptr) {
+                tft.setTextColor(ALCOLOR);
+                tft.print(Command);
+                tft.println(" -> Not Supported");
+            } else {
+                tft.setTextColor(bruceConfig.priColor);
+                tft.print(Command);
+            }
+            
+            if (Argument.length() > 0 && Command != "REM") {
+                tft.setTextColor(TFT_WHITE);
+                tft.print(" ");
+                tft.println(Argument);
+            } else {
+                tft.println();
+            }
+        }
+    }
+    
+    payloadFile.close();
+    sendKeyRelease();
+    
+    Serial.println("[BLE Spoof] DuckyScript execution completed");
+    return true;
+}
+
+// ============================================================================
 // UI Functions
 // ============================================================================
 
@@ -1001,6 +1333,76 @@ void ble_spoof_stop_spoofing() {
     }
 }
 
+void ble_spoof_execute_payload() {
+    // Check if spoofing is active
+    if (!bleSpoofModule.isSpoofing()) {
+        displayWarning("Start spoofing first", true);
+        return;
+    }
+    
+    // Check if HID is enabled
+    if (!bleSpoofModule.isHIDEnabled()) {
+        displayWarning("HID not enabled", true);
+        return;
+    }
+    
+    // Choose filesystem
+    options.clear();
+    FS *selectedFs = nullptr;
+    
+    if (setupSdCard()) {
+        options.push_back({"SD Card", [&selectedFs]() { selectedFs = &SD; }});
+    }
+    options.push_back({"LittleFS", [&selectedFs]() { selectedFs = &LittleFS; }});
+    addOptionToMainMenu();
+    
+    loopOptions(options, MENU_TYPE_REGULAR, "Load payload from:");
+    
+    if (selectedFs == nullptr) {
+        displayWarning("Canceled", true);
+        return;
+    }
+    
+    // Use file picker to select DuckyScript file
+    String filepath = loopSD(*selectedFs, true, "*.txt");
+    
+    if (filepath.isEmpty()) {
+        displayWarning("Canceled", true);
+        return;
+    }
+    
+    // Display confirmation
+    drawMainBorder();
+    tft.setTextSize(1);
+    tft.setCursor(10, 30);
+    tft.setTextColor(bruceConfig.priColor);
+    tft.println("Execute payload?");
+    tft.println();
+    tft.setTextColor(TFT_WHITE);
+    String filename = filepath.substring(filepath.lastIndexOf('/') + 1);
+    tft.printf("File: %s\n", filename.c_str());
+    tft.println();
+    tft.println("Press SELECT to execute");
+    tft.println("Press ESC to cancel");
+    
+    while (true) {
+        if (check(SelPress)) {
+            // Execute the script
+            if (bleSpoofModule.executeDuckyScript(*selectedFs, filepath)) {
+                displaySuccess("Payload executed!", true);
+            } else {
+                displayError("Execution failed", true);
+            }
+            break;
+        }
+        if (check(EscPress)) {
+            displayWarning("Canceled", true);
+            break;
+        }
+        yield();
+    }
+}
+
 void ble_spoof_main_menu() {
     options.clear();
     options.push_back({"Scan & Capture", ble_spoof_scan_and_capture});
@@ -1008,6 +1410,7 @@ void ble_spoof_main_menu() {
     options.push_back({"Start Spoofing", ble_spoof_start_spoofing});
     if (bleSpoofModule.isSpoofing()) {
         options.push_back({"Stop Spoofing", ble_spoof_stop_spoofing});
+        options.push_back({"Execute Payload", ble_spoof_execute_payload});
     }
     addOptionToMainMenu();
     
